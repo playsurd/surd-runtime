@@ -1,3 +1,3 @@
 # surd-runtime
 
-Shared runtime loaded by every game. Engine adapters live in `adapters/`.
+Shared runtime loaded by every game. Current: `v1/runtime.js`; adapters in `v1/adapters/`.
