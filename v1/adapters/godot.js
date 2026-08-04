@@ -44,8 +44,12 @@ window.SURD_ADAPTERS.godot = async function (M, S) {
   // register from the document's own origin, and games run from a blob: document, so
   // it always throws. Neutralise it — the feature is irrelevant here.
   try {
-    if (navigator.serviceWorker && navigator.serviceWorker.register) {
-      navigator.serviceWorker.register = function () { return Promise.reject(new Error('disabled')); };
+    var sw = navigator.serviceWorker;
+    if (sw) {
+      var no = function () { return Promise.resolve(undefined); };
+      if (sw.register) sw.register = no;
+      if (sw.getRegistration) sw.getRegistration = no;
+      if (sw.getRegistrations) sw.getRegistrations = function () { return Promise.resolve([]); };
     }
   } catch (e) {}
 
