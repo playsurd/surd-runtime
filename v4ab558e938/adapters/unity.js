@@ -1,0 +1,87 @@
+window.SURD_ADAPTERS = window.SURD_ADAPTERS || {};
+window.SURD_ADAPTERS.unity = async function (M, S) {
+  var cfg = M.config || {};
+  document.body.style.margin = '0';
+  document.body.style.background = '#000';
+  if (cfg.era === 'modern') {
+    var canvas = document.createElement('canvas');
+    canvas.id = 'unity-canvas';
+    canvas.style.cssText = 'width:100vw;height:100vh;display:block';
+    document.body.appendChild(canvas);
+    S.status('loading Unity engine');
+    await S.loadScript(S.url(cfg.loaderJs));
+    S.progress(0.15);
+    var uconf = {
+      dataUrl: await S.asset('data'),
+      frameworkUrl: await S.asset('framework'),
+      codeUrl: await S.asset('code'),
+      streamingAssetsUrl: cfg.streamingAssetsUrl ? S.url(cfg.streamingAssetsUrl) : 'StreamingAssets',
+      companyName: cfg.companyName || 'surd',
+      productName: cfg.productName || M.id,
+      productVersion: cfg.productVersion || '1.0',
+    };
+    if (cfg.memory) uconf.memoryUrl = S.url(cfg.memory);
+    if (cfg.symbols) uconf.symbolsUrl = S.url(cfg.symbols);
+    S.status('starting Unity game');
+    createUnityInstance(canvas, uconf, function (p) { S.progress(0.15 + p * 0.85); })
+      .then(function () { S.done(); S.post('info', 'unity instance running'); })
+      .catch(function (e) { S.fail((e && e.message) || e); });
+    return;
+  }
+  var container = document.createElement('div');
+  container.id = 'gameContainer';
+  container.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+  document.body.appendChild(container);
+  S.status('loading Unity engine');
+  if (cfg.progressJs) await S.loadScript(S.url(cfg.progressJs)).catch(function () {});
+  await S.loadScript(S.url(cfg.loaderJs));
+  S.progress(0.15);
+  var data = await S.asset('data');
+  var legacy = Object.assign({
+    unityVersion: '2019.1.0f1',
+  }, cfg.unityConfig || {}, {
+    companyName: cfg.companyName || (cfg.unityConfig && cfg.unityConfig.companyName) || 'surd',
+    productName: cfg.productName || (cfg.unityConfig && cfg.unityConfig.productName) || M.id,
+    dataUrl: data,
+    TOTAL_MEMORY: cfg.totalMemory || 268435456,
+    graphicsAPI: cfg.graphicsAPI || ['WebGL 2.0', 'WebGL 1.0'],
+    webglContextAttributes: { preserveDrawingBuffer: false },
+    splashScreenStyle: cfg.splashScreenStyle || (cfg.unityConfig && cfg.unityConfig.splashScreenStyle) || 'Dark',
+    backgroundColor: cfg.backgroundColor || (cfg.unityConfig && cfg.unityConfig.backgroundColor) || '#000000',
+  });
+  if (cfg.variant === 'asm') {
+    legacy.asmCodeUrl = await S.asset('code');
+    legacy.asmFrameworkUrl = await S.asset('framework');
+    legacy.codeUrl = legacy.asmCodeUrl;
+    if (M.files.memory) legacy.memUrl = await S.asset('memory');
+  } else {
+    legacy.wasmCodeUrl = await S.asset('code');
+    legacy.wasmFrameworkUrl = await S.asset('framework');
+  }
+  S.status('starting Unity game');
+  var progressCb = function (_g, p) { if (typeof p === 'number') S.progress(0.15 + p * 0.85); if (p === 1) S.done(); };
+  for (var k in legacy) {
+    if (typeof legacy[k] === 'string' && /\//.test(legacy[k]) && !/^(data:|blob:|https?:)/.test(legacy[k])) {
+      legacy[k] = new URL(legacy[k], document.baseURI).href;
+    }
+  }
+  var jsonUrl = URL.createObjectURL(new Blob([JSON.stringify(legacy)], { type: 'application/json' }));
+  var call = {
+    object: function () { UnityLoader.instantiate('gameContainer', legacy, { onProgress: progressCb, url: jsonUrl }); },
+    url: function () { UnityLoader.instantiate('gameContainer', jsonUrl, { onProgress: progressCb }); },
+  };
+  var first = cfg.instantiate === 'object' ? 'object' : 'url';
+  var other = first === 'object' ? 'url' : 'object';
+  try {
+    call[first]();
+  } catch (e) {
+    S.post('warn', 'unity ' + first + ' form rejected (' + (e && e.message || e) + ') — retrying as ' + other);
+    try { call[other](); }
+    catch (e2) { S.fail('instantiate: ' + (e2 && e2.message || e2)); }
+  }
+  var tries = 0, iv = setInterval(function () {
+    var c = container.querySelector('canvas');
+    if (c && c.width > 1) { S.done(); clearInterval(iv); }
+    if (++tries > 120) clearInterval(iv);
+  }, 250);
+};
