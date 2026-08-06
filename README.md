@@ -1,3 +1,3 @@
 # surd-runtime
 
-Shared runtime loaded by every game. Current: `v1166d70eb0/runtime.js`; adapters in `v1166d70eb0/adapters/`.
+Shared runtime loaded by every game. Current: `v8540f004e4/runtime.js`; adapters in `v8540f004e4/adapters/`.
